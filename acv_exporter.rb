@@ -1,31 +1,50 @@
 ################################################################
-# USAGE : acv = ACVExporter.new("youracvpath.acv")
-#         acv.export_images("image.jpg", "export_image")
+# USAGE : acv = ACVExporter.new('youracvpath.acv')
+#         acv.export_images('image.jpg', 'export_image')
+#         acv.export_csv('output.csv')
+
 ################################################################
 
 require 'spliner'
 require 'matrix'
+require 'rmagick'
+require 'csv'
 
 class ACVExporter
 
   attr_reader :acv_file_path
 
+  POLYNOMS_MAX_DEGREE = 10
+
   def initialize(acv_file_path)
     @acv_file_path = acv_file_path
   end
 
+  def range
+    @range ||= self.class.range(rationalized_coords, 255)
+  end
+
+  def rationalized_coords
+    @rationalized_coords ||= self.class.acv_coords(acv_file_path)
+  end
+
   def polynoms
-    rationalized_coords = self.class.acv_coords(acv_file_path)
-    total_range         = self.class.range(rationalized_coords, 255)
-    values              = self.class.spline_values(rationalized_coords, total_range)
-    10.times.map { |degree| self.class.polynom(total_range, values, degree) }
+    values = self.class.spline_values(rationalized_coords, range)
+    POLYNOMS_MAX_DEGREE.times.map { |degree| self.class.polynom(range, values, degree) }
   end
 
   def export_images(original_path, export_base_name)
     self.class.export_images(polynoms, original_path, export_base_name)
   end
 
+  def export_csv(csv_output_path)
+    self.class.export_csv_file(range, polynoms, csv_output_path)
+  end
+
+
   class << self
+
+    MAX_VALUE = 1
 
     def polynom x, y, degree
       x_data = x.map { |xi| (0..degree).map { |pow| (xi**pow).to_f } }
@@ -34,19 +53,19 @@ class ACVExporter
       ((mx.t * mx).inv * mx.t * my).transpose.to_a[0]
     end
     
-    def excel_formula(polynom)
+    def excel_formula_string(polynom)
       ->(x) do
-        monoms = p.length.times.map{|i| "(#{ p[i] }*#{ x }^#{ i })".gsub("*#{ x }^0", '') }
+        monoms = polynom.length.times.map{|i| "(#{ polynom[i] }*#{ x }^#{ i })".gsub("*#{ x }^0", '') }
         "=#{monoms.join('+')}"
       end
     end
     
     def export_csv_file(range, polynom_ary, export_path)
-      formulas = polynom_ary.map{ |p| excel_formula(p) }
+      formulas = polynom_ary.map{ |p| excel_formula_string(p) }
       computed = formulas.map do |polynom|
         range.length.times.map{|v| polynom["A#{ v.to_i + 1 }"] }
       end
-      ary = range.zip(ys,*computed)
+      ary = range.zip(range,*computed)
       CSV.open(export_path, 'wb', col_sep: ',') do |csv|
         ary.each do |l|
           csv << l
@@ -67,7 +86,7 @@ class ACVExporter
       points_count = ary[2]
       points = ary[3..(3 + points_count * 2 - 1)]
       dary = points_count.times.map{|i| [points[2*i+1], points[2*i]]}
-      dary.map{ |dot| dot.map{ |v| v / 255.0 } }
+      dary.map{ |dot| dot.map{ |v| v / MAX_VALUE.to_f } }
     end
     
     def spline_values(coords, range)
