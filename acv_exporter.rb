@@ -44,7 +44,7 @@ class ACVExporter
 
   class << self
 
-    MAX_VALUE = 1
+    MAX_VALUE = 255
 
     def polynom x, y, degree
       x_data = x.map { |xi| (0..degree).map { |pow| (xi**pow).to_f } }
