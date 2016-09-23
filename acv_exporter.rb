@@ -1,105 +1,110 @@
 ################################################################
 # USAGE : acv = ACVExporter.new('youracvpath.acv')
-#         acv.export_images('image.jpg', 'export_image')
+#         acv.export_image('image.jpg', 'export_image')
 #         acv.export_csv('output.csv')
 
 ################################################################
 
 require 'spliner'
 require 'matrix'
-require 'rmagick'
-require 'csv'
+require 'fileutils'
 
 class ACVExporter
 
   attr_reader :acv_file_path
+  
+  MAX_VALUE   = 255
+  RANGE_SIZE  = 255
+  POLYNOM_DEGREE = 10
 
-  POLYNOMS_MAX_DEGREE = 10
+  CHANNELS = [:rgb, :r, :g, :b]
+
+  IndexReader       = Struct.new(:position)
+  MultiChannelCurve = Struct.new(*CHANNELS)
+
+  ChannelCurve      = Struct.new(:points) do 
+    
+    def range
+      @range ||= ACVExporter.range(self.points)
+    end
+
+    def polynom
+      @polynom ||= ACVExporter.compute_polynom(points, range)
+    end
+
+  end
 
   def initialize(acv_file_path)
+    raise "No file at this path" unless File.exist?(acv_file_path)
     @acv_file_path = acv_file_path
   end
 
-  def range
-    @range ||= self.class.range(rationalized_coords, 255)
+  def curves
+    @curves ||= self.class.read_curves(acv_file_path)
   end
 
-  def rationalized_coords
-    @rationalized_coords ||= self.class.acv_coords(acv_file_path)
+  def export_image(original_path, export_base_name)
+    self.class.export_image(curves, original_path, export_base_name)
   end
 
-  def polynoms
-    values = self.class.spline_values(rationalized_coords, range)
-    POLYNOMS_MAX_DEGREE.times.map { |degree| self.class.polynom(range, values, degree) }
-  end
+  class << self    
 
-  def export_images(original_path, export_base_name)
-    self.class.export_images(polynoms, original_path, export_base_name)
-  end
+    def read_curves file_path
+      ary = File.read(file_path, encode: 'binary').unpack('S>*')
+      multi_channel_curve(ary)
+    end
 
-  def export_csv(csv_output_path)
-    self.class.export_csv_file(range, polynoms, csv_output_path)
-  end
+    def multi_channel_curve ary
+      ir = Struct.new(:position).new(2)
+      channels_points = CHANNELS.map { |k| sanitize_points read_array!(ary, ir) }
+      channels_curves = channels_points.map{ |points| ChannelCurve.new(points) }
+      MultiChannelCurve.new(*channels_curves)
+    end
 
+    def compute_polynom points, range
+      values = spline_values(points, range)
+      polynom(range, values)
+    end
 
-  class << self
+    def sanitize_points array
+      ary = (array.length / 2).times.map{|i| [array[2*i+1], array[2*i]]}
+      ary.map{ |dot| dot.map{ |v| v / MAX_VALUE.to_f } }
+    end
 
-    MAX_VALUE = 1
+    def read_array! array, index_reader
+      ary = array.drop(index_reader.position)
+      raise 'Wrong index reader position' if ary.empty?
+      points_count = (ary.first * 2)
+      index_reader.position += points_count + 1
+      ary[1..points_count]
+    end
 
-    def polynom x, y, degree
-      x_data = x.map { |xi| (0..degree).map { |pow| (xi**pow).to_f } }
+    def polynom x, y
+      x_data = x.map { |xi| (0..POLYNOM_DEGREE).map { |pow| (xi**pow).to_f } }
       mx = Matrix[*x_data]
       my = Matrix.column_vector(y)
       ((mx.t * mx).inv * mx.t * my).transpose.to_a[0]
     end
-    
-    def excel_formula_string(polynom)
-      ->(x) do
-        monoms = polynom.length.times.map{|i| "(#{ polynom[i] }*#{ x }^#{ i })".gsub("*#{ x }^0", '') }
-        "=#{monoms.join('+')}"
-      end
-    end
-    
-    def export_csv_file(range, polynom_ary, export_path)
-      formulas = polynom_ary.map{ |p| excel_formula_string(p) }
-      computed = formulas.map do |polynom|
-        range.length.times.map{|v| polynom["A#{ v.to_i + 1 }"] }
-      end
-      ary = range.zip(range,*computed)
-      CSV.open(export_path, 'wb', col_sep: ',') do |csv|
-        ary.each do |l|
-          csv << l
-        end
-      end
-    end
-    
-    def export_images(polynom_ary, image_path, export_base_name)
-      polynom_ary.each_with_index do |p, i|
-        magick_string = p.reverse.join(',')
-        `convert #{ image_path } -function Polynomial #{ magick_string } #{export_base_name}_#{i}.jpg`
-        puts "Polynom degree #{ p.length - 1 }: #{magick_string}"
-      end
-    end
-    
-    def acv_coords(acv_path)
-      ary = File.read(acv_path, encode: 'binary').unpack('S>*')
-      points_count = ary[2]
-      points = ary[3..(3 + points_count * 2 - 1)]
-      dary = points_count.times.map{|i| [points[2*i+1], points[2*i]]}
-      dary.map{ |dot| dot.map{ |v| v / MAX_VALUE.to_f } }
-    end
-    
+      
     def spline_values(coords, range)
       spline = Spliner::Spliner.new coords.map(&:first), coords.map(&:last)
       spline[range]
     end
     
-    def range(coords, points_quantity)
+    def range coords
       min_value, max_value = coords.first.first, coords.last.first
-      (min_value..max_value).step((max_value - min_value)/points_quantity).to_a
+      (min_value..max_value).step((max_value - min_value)/RANGE_SIZE).to_a
     end
 
+    def export_image(curves, image_path, export_base_name)
+      FileUtils.cp image_path, export_base_name
+      CHANNELS.each do |channel|
+        magick_string = curves[channel].polynom.reverse.join(',')
+        puts "#{ channel }: #{ curves[channel].polynom }  -- (x^0 -> x^n)"
+        `convert #{ export_base_name } -channel #{ channel.to_s.upcase } -function Polynomial #{ magick_string } #{export_base_name}`
+      end
+    end
+  
   end
 
 end
-
