@@ -17,6 +17,7 @@ class ACVExporter
   RANGE_SIZE  = 255
   POLYNOM_DEGREE = 10
 
+
   CHANNELS = [:rgb, :r, :g, :b]
 
   IndexReader       = Struct.new(:position)
@@ -83,9 +84,13 @@ class ACVExporter
       x_data = x.map { |xi| (0..POLYNOM_DEGREE).map { |pow| (xi**pow).to_f } }
       mx = Matrix[*x_data]
       my = Matrix.column_vector(y)
-      ((mx.t * mx).inv * mx.t * my).transpose.to_a[0]
+      ((mx.t * mx).inv * mx.t * my).transpose.to_a[0].map{|e| truncate(e, 3) }
     end
-      
+    
+    def truncate i, length
+      (i * (10 ** length)).to_i.to_f / (10 ** length)
+    end
+
     def spline_values(coords, range)
       spline = Spliner::Spliner.new coords.map(&:first), coords.map(&:last)
       spline[range]
