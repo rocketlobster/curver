@@ -55,7 +55,7 @@ class ACVExporter
     end
 
     def multi_channel_curve ary
-      ir = Struct.new(:position).new(2)
+      ir = IndexReader.new(2)
       channels_points = CHANNELS.map { |k| sanitize_points read_array!(ary, ir) }
       channels_curves = channels_points.map{ |points| ChannelCurve.new(points) }
       MultiChannelCurve.new(*channels_curves)
