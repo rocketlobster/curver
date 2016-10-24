@@ -10,6 +10,7 @@ Small ruby script to convert Photoshop curve file into polynoms, for further use
     acv.compute_polynoms
 
   If you have ImageMagick, you can export the image: 
+  
     acv.export_image('image.jpg', 'output.jpg')
 
 ### In command line:
