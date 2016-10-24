@@ -9,5 +9,4 @@ output_image_path   = ARGV[2]
 raise "You have to specify a valid input image path and output path" unless image_path && File.exist?(image_path) && output_image_path
 
 acv = ACVExporter.new(file_path)
-
 acv.export_image(image_path, output_image_path)

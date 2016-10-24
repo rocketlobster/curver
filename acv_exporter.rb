@@ -12,11 +12,6 @@ require 'fileutils'
 class ACVExporter
 
   attr_reader :acv_file_path
-  
-  MAX_VALUE   = 255
-  RANGE_SIZE  = 255
-  POLYNOM_DEGREE = 10
-
 
   CHANNELS = [:rgb, :r, :g, :b]
 
@@ -37,6 +32,7 @@ class ACVExporter
 
   def initialize(acv_file_path)
     raise "No file at this path" unless File.exist?(acv_file_path)
+    self.class.set_default_values
     @acv_file_path = acv_file_path
   end
 
@@ -48,7 +44,22 @@ class ACVExporter
     self.class.export_image(curves, original_path, export_base_name)
   end
 
-  class << self    
+  def compute_polynoms
+    CHANNELS.each do |channel|
+      puts "#{ channel }: #{ curves[channel].polynom }  -- (x^0 -> x^n)"
+    end
+  end
+
+  class << self 
+
+    attr_accessor :polynom_degree, :max_value, :range_size, :polynom_precision
+
+    def set_default_values
+      self.polynom_degree    ||= 6
+      self.max_value         ||= 255
+      self.range_size        ||= 255  
+      self.polynom_precision ||= 3    
+    end
 
     def read_curves file_path
       ary = File.read(file_path, encode: 'binary').unpack('S>*')
@@ -69,7 +80,7 @@ class ACVExporter
 
     def sanitize_points array
       ary = (array.length / 2).times.map{|i| [array[2*i+1], array[2*i]]}
-      ary.map{ |dot| dot.map{ |v| v / MAX_VALUE.to_f } }
+      ary.map{ |dot| dot.map{ |v| v / max_value.to_f } }
     end
 
     def read_array! array, index_reader
@@ -81,10 +92,10 @@ class ACVExporter
     end
 
     def polynom x, y
-      x_data = x.map { |xi| (0..POLYNOM_DEGREE).map { |pow| (xi**pow).to_f } }
+      x_data = x.map { |xi| (0..polynom_degree).map { |pow| (xi**pow).to_f } }
       mx = Matrix[*x_data]
       my = Matrix.column_vector(y)
-      ((mx.t * mx).inv * mx.t * my).transpose.to_a[0].map{|e| truncate(e, 3) }
+      ((mx.t * mx).inv * mx.t * my).transpose.to_a[0].map{|e| truncate(e, polynom_precision) }
     end
     
     def truncate i, length
@@ -98,7 +109,7 @@ class ACVExporter
     
     def range coords
       min_value, max_value = coords.first.first, coords.last.first
-      (min_value..max_value).step((max_value - min_value)/RANGE_SIZE).to_a
+      (min_value..max_value).step((max_value - min_value)/range_size).to_a
     end
 
     def export_image(curves, image_path, export_base_name)

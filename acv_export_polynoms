@@ -1,0 +1,10 @@
+#!/usr/bin/env ruby
+
+load 'acv_exporter.rb'
+
+file_path           = ARGV[0]
+
+raise 'You have to specify a valid file path' unless file_path && File.exist?(file_path)
+
+acv = ACVExporter.new(file_path)
+acv.compute_polynoms
