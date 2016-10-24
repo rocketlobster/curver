@@ -16,6 +16,8 @@ Small ruby script to convert Photoshop curve file into polynoms, for further use
 
     ./acv_export_polynoms example.acv 
 
+  The same, if you have ImageMagick, you can also export the image with the interpolated polynom:
+
     ./acv_export_image example.acv image.jpg output_path.jpg
 
 ## Settings
