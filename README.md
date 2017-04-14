@@ -18,9 +18,10 @@ Or in Gemfile :
 ## Settings
 
   You can specify the polynom_degree, the max_value that you want, or the polynom_precision. 
-  By default: 
+  By default : 
 
     Curver.polynom_degree    = 6
-    Curver.max_value         = 255
+    Curver.max_value         = 255 
     Curver.polynom_precision = 3   
 
+255 is the max_value used for ImageMagick. For canvas image processing, max_value of 1 is more convenient.
