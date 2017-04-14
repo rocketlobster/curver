@@ -23,3 +23,4 @@ Or in Gemfile :
     Curver.polynom_degree    = 6
     Curver.max_value         = 255
     Curver.polynom_precision = 3   
+
