@@ -12,7 +12,7 @@ Or in Gemfile :
 
 ### Usage:
 
-    acv = Curver.new('example.acv')
+    acv = Curver.new('path/example.acv')
     acv.polynoms
 
 ## Settings
